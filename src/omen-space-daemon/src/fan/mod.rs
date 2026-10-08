@@ -71,7 +71,7 @@ async fn sysfs_exists<P: AsRef<Path>>(path: P) -> bool {
 }
 
 async fn sysfs_write<P: AsRef<Path>, S: AsRef<str>>(path: P, val: S) -> bool {
-    tokio::fs::write(path, val.as_ref().as_bytes()).await.is_ok()
+    crate::sysfs::write_async(path.as_ref(), val.as_ref().as_bytes()).await.is_ok()
 }
 
 impl FanService {

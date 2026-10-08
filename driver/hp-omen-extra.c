@@ -243,6 +243,21 @@ static ssize_t zone_store(struct device *dev, struct device_attribute *attr,
   return ret ? -EIO : count;
 }
 
+/*
+ * hp_wmi_perform_query() returns either a negative errno or the *positive* BIOS
+ * return code (e.g. 0x3 = unknown command, which is what boards without a
+ * keyboard backlight such as the OMEN 45L desktop answer for the backlight and
+ * gaming-key commands).  A sysfs show/store callback must only ever return a
+ * byte count or a negative errno: handing the raw BIOS code back makes write(2)
+ * report "3 bytes written" for a 1-byte write, which crashed userspace callers
+ * that trust the count (issue #253).
+ */
+static int hp_bios_status_to_errno(int ret) {
+  if (ret <= 0)
+    return ret;
+  return ret == 0x3 /* HPWMI_RET_UNKNOWN_COMMAND */ ? -ENODEV : -EIO;
+}
+
 /* ── brightness on/off ── */
 static ssize_t brightness_show(struct device *dev,
                                struct device_attribute *attr, char *buf) {
@@ -255,7 +270,7 @@ static ssize_t brightness_show(struct device *dev,
   pr_debug("hp-omen-extra: brightness_show: query returned %d, data 0x%08X\n", ret, data);
 
   if (ret)
-    return ret;
+    return hp_bios_status_to_errno(ret);
 
   /* 0xE4 = on, 0x64 = off */
   return sysfs_emit(buf, "%d\n", data == 0xE4 ? 1 : 0);
@@ -280,7 +295,7 @@ static ssize_t brightness_store(struct device *dev,
   
   pr_debug("hp-omen-extra: brightness_store(val=%d, data=0x%08X): query returned %d\n", val, data, ret);
 
-  return ret ? ret : count;
+  return ret ? hp_bios_status_to_errno(ret) : count;
 }
 
 /* ── gaming key (win lock) ── */
@@ -297,10 +312,8 @@ static ssize_t win_lock_show(struct device *dev,
   ret = hp_wmi_perform_query(0 /* commandtype */, HPWMI_GAMING_KEY, &data,
                        sizeof(data), sizeof(data));
 
-  if (ret == 0x3) /* HPWMI_RET_UNKNOWN_COMMAND */
-    return -ENODEV;
   if (ret)
-    return ret;
+    return hp_bios_status_to_errno(ret);
 
   return sysfs_emit(buf, "%d\n", data & 0x01);
 }
@@ -322,7 +335,7 @@ static ssize_t win_lock_store(struct device *dev,
   ret = hp_wmi_perform_query(0 /* commandtype */, HPWMI_GAMING_KEY, &data,
                        sizeof(data), 0);
 
-  return ret ? ret : count;
+  return ret ? hp_bios_status_to_errno(ret) : count;
 }
 
 

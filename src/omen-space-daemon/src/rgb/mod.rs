@@ -78,6 +78,14 @@ impl RgbHardware {
         let caps = crate::capabilities::detect(board_id.trim(), prod_name.trim(), &specs.cpu_spec);
         let max_zones = if caps.has_four_zone_rgb { 4 } else { 8 };
 
+        // Desktops have no keyboard backlight. hp-omen-extra still registers zone0..7 and
+        // brightness there (it is one module for every board), but the BIOS rejects the
+        // backlight commands, so driving them is pointless. Their lighting is the HID
+        // controller handled by `desktop_rgb`.
+        if caps.is_desktop() && !caps.has_keyboard_backlight {
+            return Self { driver_path: None, is_new_driver: false, zone_count: 4, available: false };
+        }
+
         if Path::new(new_path).exists() {
             // Count zones for new driver (8 for per-key models, else 4)
             let mut zone_count = if Path::new("/sys/devices/platform/omen-rgb-keyboard/rgb_zones/zone04").exists() { 8 } else { 4 };
@@ -151,7 +159,7 @@ impl RgbHardware {
             format!("zone{}", actual_zone)
         };
         let path = format!("{}/{}", base, filename);
-        let _ = std::fs::write(&path, hex_color);
+        let _ = crate::sysfs::write(&path, hex_color);
     }
 
     fn write_all(&self, hex_color: &str) {
@@ -159,7 +167,7 @@ impl RgbHardware {
         if self.is_new_driver {
             let all_path = format!("{}/all", base);
             if Path::new(&all_path).exists() {
-                let _ = std::fs::write(&all_path, hex_color);
+                let _ = crate::sysfs::write(&all_path, hex_color);
                 return;
             }
         }
@@ -173,14 +181,14 @@ impl RgbHardware {
         let path = format!("{}/brightness", base);
         if !Path::new(&path).exists() { return; }
         let val_str = if self.is_new_driver { value.to_string() } else { if value > 0 { "1".to_string() } else { "0".to_string() } };
-        let _ = std::fs::write(&path, val_str);
+        let _ = crate::sysfs::write(&path, val_str);
     }
 
     fn write_win_lock(&self, locked: bool) {
         let Some(ref base) = self.driver_path else { return; };
         let path = format!("{}/win_lock", base);
         if Path::new(&path).exists() {
-            let _ = std::fs::write(&path, if locked { "1" } else { "0" });
+            let _ = crate::sysfs::write(&path, if locked { "1" } else { "0" });
         }
     }
 
@@ -188,9 +196,9 @@ impl RgbHardware {
         if !self.is_new_driver { return; }
         let Some(ref base) = self.driver_path else { return; };
         let hw_mode = if mode == "cycle" { "rainbow" } else { mode };
-        let _ = std::fs::write(format!("{}/animation_mode", base), hw_mode);
+        let _ = crate::sysfs::write(format!("{}/animation_mode", base), hw_mode);
         let mapped_speed = (speed / 10).clamp(1, 10);
-        let _ = std::fs::write(format!("{}/animation_speed", base), mapped_speed.to_string());
+        let _ = crate::sysfs::write(format!("{}/animation_speed", base), mapped_speed.to_string());
     }
 }
 
@@ -744,7 +752,9 @@ impl RgbService {
         // no-ops while still returning "OK" and saving the config. Re-probe when
         // the cached state is stale so a late/missing driver is picked up (and a
         // disappeared driver is re-detected when it comes back).
-        if !g.hw.available {
+        // Boards driven purely by the desktop HID controller never have a sysfs driver, so
+        // there is nothing to re-probe for.
+        if !g.hw.available && !g.desktop_rgb.is_available() {
             g.hw = RgbHardware::detect();
         } else if let Some(ref path) = g.hw.driver_path {
             if !Path::new(path).exists() {
@@ -897,16 +907,17 @@ impl RgbService {
             "direction": g.config.direction,
             "power": g.config.power,
             "win_lock": g.config.win_lock,
-            "unsupported": !g.hw.available,
+            "unsupported": !g.hw.available && !g.desktop_rgb.is_available(),
             "driver_active": g.hw.available,
             "driver_path": g.hw.driver_path.clone().unwrap_or_default(),
             "is_new_driver": g.hw.is_new_driver,
             "zone_count": g.hw.zone_count,
             "zone_count_override": g.config.zone_count_override,
             "per_key_available": g.hid_per_key.is_available(),
+            "desktop_rgb_available": g.desktop_rgb.is_available(),
             "hid_device_pid": g.hid_per_key.device_pid.map(|p| format!("{:04X}", p)).unwrap_or_default(),
         });
-        if !g.hw.available && !g.hid_per_key.is_available() {
+        if !g.hw.available && !g.hid_per_key.is_available() && !g.desktop_rgb.is_available() {
             snap["unavailable_reason"] = serde_json::Value::String(
                 "RGB kernel module not loaded. Install 'hp_omen_extra' or 'omen-rgb-keyboard'. \
                  No HID per-key device found either.".to_string()

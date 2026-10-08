@@ -425,7 +425,7 @@ impl PlatformService {
         let mut set = false;
         if let Ok(entries) = glob("/sys/class/power_supply/BAT*/charge_control_end_threshold") {
             for entry in entries.filter_map(Result::ok) {
-                if tokio::fs::write(&entry, limit.to_string()).await.is_ok() { set = true; }
+                if crate::sysfs::write_async(entry, limit.to_string()).await.is_ok() { set = true; }
             }
         }
 
@@ -607,7 +607,7 @@ pub fn set_thermal_policy_by_name(profile: &str) -> bool {
         "/sys/devices/platform/hp-omen/thermal-profile",
     ] {
         if std::path::Path::new(node).exists()
-            && std::fs::write(node, mode_str).is_ok() {
+            && crate::sysfs::write(node, mode_str).is_ok() {
                 set = true;
             }
     }

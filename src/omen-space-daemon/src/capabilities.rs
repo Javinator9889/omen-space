@@ -117,6 +117,36 @@ impl Default for ModelCapabilities {
     }
 }
 
+impl ModelCapabilities {
+    pub fn is_desktop(&self) -> bool {
+        self.family.eq_ignore_ascii_case("desktop")
+    }
+
+    /// Conservative profile for an HP desktop whose board is not in the database yet.
+    /// Without it an unknown desktop inherits the laptop defaults (battery care, keyboard
+    /// backlight, Intel undervolt, GPU boost), none of which exist on a tower.
+    fn generic_desktop() -> Self {
+        Self {
+            product_id: "DESKTOP".to_string(),
+            model_name: "OMEN Desktop".to_string(),
+            family: "Desktop".to_string(),
+            supports_fan_control_wmi: false,
+            supports_fan_control_ec: false,
+            supports_fan_curves: false,
+            supports_rpm_readback: false,
+            supports_gpu_power_boost: false,
+            has_keyboard_backlight: false,
+            has_four_zone_rgb: false,
+            supports_undervolt: false,
+            supports_tcc_offset: false,
+            supports_power_limits: false,
+            supports_battery_care: false,
+            notes: "Unrecognised HP desktop board: only the HID lighting controller and telemetry are enabled until the board is added to the database.".to_string(),
+            ..Self::default()
+        }
+    }
+}
+
 pub struct LinuxCapabilityClassifier;
 
 impl LinuxCapabilityClassifier {
@@ -241,11 +271,30 @@ impl LinuxCapabilityClassifier {
     }
 }
 
+/// Extracts the chassis size from an HP desktop product name and maps it to the
+/// placeholder database id, e.g. "OMEN by HP 45L Gaming Desktop GT22-0xxx" -> "DESKTOP-45L".
+fn desktop_size_id(product_lower: &str) -> Option<String> {
+    product_lower.split_whitespace().find_map(|tok| {
+        let digits = tok.strip_suffix('l')?;
+        (digits.len() == 2 && digits.chars().all(|c| c.is_ascii_digit()))
+            .then(|| format!("DESKTOP-{}L", digits))
+    })
+}
+
 pub fn detect(board_id: &str, product_name: &str, cpu_model: &str) -> ModelCapabilities {
+    let prod_lower = product_name.to_lowercase();
     let mut cap = get_known_model(board_id).or_else(|| {
-        let prod_lower = product_name.to_lowercase();
         // Fallback by product name if exact board_id is not found
         get_all_models().iter().find(|m| prod_lower.contains(&m.model_name.to_lowercase())).cloned()
+    }).or_else(|| {
+        // HP names desktops "OMEN by HP 45L Gaming Desktop ...", which never contains the
+        // database's "OMEN 45L Desktop", so match them by chassis size instead.
+        if !(prod_lower.contains("desktop") || prod_lower.contains("tower")) {
+            return None;
+        }
+        desktop_size_id(&prod_lower)
+            .and_then(|id| get_known_model(&id))
+            .or_else(|| Some(ModelCapabilities::generic_desktop()))
     }).unwrap_or_default();
     
     let cpu_upper = cpu_model.to_uppercase();
@@ -303,5 +352,66 @@ mod tests {
         assert!(cap.allow_decoupled_wmi_thermal_policy_fallback);
         assert!(!cap.supports_undervolt); // AMD should not have undervolt enabled
         assert!(LinuxCapabilityClassifier::is_wmaa_abort_prone_board("8786"));
+    }
+
+    const GT22_PRODUCT: &str = "OMEN by HP 45L Gaming Desktop GT22-0xxx";
+
+    fn assert_tower_without_laptop_features(cap: &ModelCapabilities) {
+        assert!(cap.is_desktop());
+        assert!(!cap.has_keyboard_backlight);
+        assert!(!cap.supports_battery_care);
+        assert!(!cap.supports_undervolt && !cap.supports_tcc_offset);
+    }
+
+    #[test]
+    fn test_board_8949_omen_45l_desktop() {
+        let cap = detect("8949", GT22_PRODUCT, "AMD Ryzen 9 5900X 12-Core Processor");
+        assert_eq!(cap.product_id, "8949");
+        assert_tower_without_laptop_features(&cap);
+    }
+
+    #[test]
+    fn test_board_8949_matches_without_product_name() {
+        // fan/mod.rs calls detect(board_id, "", "") so the board id alone must be enough.
+        assert_eq!(detect("8949", "", "").product_id, "8949");
+        assert_tower_without_laptop_features(&detect("8949", "", ""));
+    }
+
+    #[test]
+    fn test_desktop_size_id_parses_hp_product_names() {
+        assert_eq!(desktop_size_id("omen by hp 45l gaming desktop gt22-0xxx").as_deref(), Some("DESKTOP-45L"));
+        assert_eq!(desktop_size_id("omen 25l desktop gt12-0xxx").as_deref(), Some("DESKTOP-25L"));
+        assert_eq!(desktop_size_id("omen by hp gaming desktop"), None);
+        assert_eq!(desktop_size_id("hp 125l"), None);
+    }
+
+    #[test]
+    fn test_unknown_board_of_known_desktop_size_uses_size_entry() {
+        let cap = detect("FFFF", "OMEN by HP 30L Gaming Desktop GT13-0xxx", "");
+        assert_eq!(cap.product_id, "DESKTOP-30L");
+        assert!(cap.is_desktop());
+    }
+
+    #[test]
+    fn test_unknown_desktop_does_not_inherit_laptop_defaults() {
+        let cap = detect("FFFF", "OMEN Gaming Desktop Something", "");
+        assert_eq!(cap.product_id, "DESKTOP");
+        assert_tower_without_laptop_features(&cap);
+    }
+
+    #[test]
+    fn test_unknown_laptop_keeps_laptop_defaults() {
+        let cap = detect("FFFF", "OMEN by HP Laptop 99-zz0xxx", "");
+        assert_eq!(cap.product_id, "DEFAULT");
+        assert!(!cap.is_desktop());
+        assert!(cap.supports_battery_care);
+    }
+
+    #[test]
+    fn test_desktop_entries_never_claim_laptop_only_features() {
+        for m in get_all_models().iter().filter(|m| m.is_desktop()) {
+            assert!(!m.supports_battery_care, "{} claims battery care", m.product_id);
+            assert!(!m.has_keyboard_backlight, "{} claims a keyboard backlight", m.product_id);
+        }
     }
 }

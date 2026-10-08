@@ -29,7 +29,7 @@ fn sysfs_exists(path: &str) -> bool {
 }
 
 async fn sysfs_write_async(path: &str, value: &str) -> bool {
-    tokio::fs::write(path, value.as_bytes()).await.is_ok()
+    crate::sysfs::write_async(path, value.as_bytes()).await.is_ok()
 }
 
 async fn sysfs_read_async(path: &str) -> Option<String> {

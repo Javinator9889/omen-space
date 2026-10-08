@@ -184,7 +184,7 @@ impl MuxService {
         }
 
         let val = if mode == "discrete" { "1" } else if mode == "advanced" { "2" } else { "0" };
-        if tokio::fs::write(HP_WMI_GRAPHICS_MODE_PATH, val).await.is_ok() {
+        if crate::sysfs::write_async(HP_WMI_GRAPHICS_MODE_PATH, val).await.is_ok() {
             {
                 let mut g = self.inner.lock().await;
                 g.cached_mode = Some(mode.clone());

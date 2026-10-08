@@ -1,6 +1,7 @@
 mod evdev_monitor;
 mod ec;
 mod fan;
+mod sysfs;
 mod config;
 mod sysmon;
 mod power;

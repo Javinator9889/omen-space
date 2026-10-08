@@ -1939,6 +1939,40 @@
             "notes": "GitHub #140 - HP Victus 16-e0194nw / ProductId 88EE. Exact conservative sibling of 88EC added so model identity resolves by ProductId instead of low-confidence 16-e0 model-name pattern; feature flags remain conservative pending field verification."
         },
         {
+            "product_id": "8949",
+            "model_name": "OMEN 45L Desktop GT22-0xxx (Ryzen)",
+            "model_year": 2022,
+            "family": "Desktop",
+            "supports_fan_control_wmi": false,
+            "supports_fan_control_ec": false,
+            "supports_fan_curves": false,
+            "supports_independent_fan_curves": false,
+            "supports_rpm_readback": false,
+            "fan_zone_count": 2,
+            "max_fan_speed_percent": 100,
+            "min_fan_speed_percent": 0,
+            "supports_performance_modes": true,
+            "performance_modes": [
+                "Default",
+                "Performance",
+                "Cool"
+            ],
+            "allow_decoupled_wmi_thermal_policy_fallback": false,
+            "has_mux_switch": false,
+            "supports_gpu_power_boost": false,
+            "supports_advanced_optimus": false,
+            "has_keyboard_backlight": false,
+            "has_four_zone_rgb": false,
+            "has_per_key_rgb": false,
+            "has_light_bar": false,
+            "supports_undervolt": false,
+            "supports_tcc_offset": false,
+            "supports_power_limits": false,
+            "supports_battery_care": false,
+            "linux_assessment": null,
+            "notes": "OMEN 45L Gaming Desktop GT22 (issue #253). Lighting is the HP TracerLED HID controller (103c:84fd), not hp-omen-extra: the BIOS answers the keyboard-backlight WMI commands with 'unknown command'. The BIOS also rejects the hp-wmi fan/thermal-profile queries (0x4/0x11/0x28 return an invalid object type), so fan writes and RPM readback stay disabled until validated on hardware."
+        },
+        {
             "product_id": "DESKTOP-25L",
             "model_name": "OMEN 25L Desktop",
             "model_year": 2021,
@@ -1968,7 +2002,7 @@
             "supports_undervolt": true,
             "supports_tcc_offset": true,
             "supports_power_limits": true,
-            "supports_battery_care": true,
+            "supports_battery_care": false,
             "linux_assessment": null,
             "notes": "OMEN 25L Desktop - fan writes disabled by v3.6.3 safety gate; RPM telemetry/performance modes only pending hardware validation."
         },
@@ -2002,7 +2036,7 @@
             "supports_undervolt": true,
             "supports_tcc_offset": true,
             "supports_power_limits": true,
-            "supports_battery_care": true,
+            "supports_battery_care": false,
             "linux_assessment": null,
             "notes": "OMEN 30L Desktop - fan writes disabled by v3.6.3 safety gate; RPM telemetry/performance modes only pending hardware validation."
         },
@@ -2036,7 +2070,7 @@
             "supports_undervolt": true,
             "supports_tcc_offset": true,
             "supports_power_limits": true,
-            "supports_battery_care": true,
+            "supports_battery_care": false,
             "linux_assessment": null,
             "notes": "OMEN 35L Desktop - fan writes disabled by v3.6.3 safety gate; RPM telemetry/performance modes only pending hardware validation."
         },
@@ -2070,7 +2104,7 @@
             "supports_undervolt": true,
             "supports_tcc_offset": true,
             "supports_power_limits": true,
-            "supports_battery_care": true,
+            "supports_battery_care": false,
             "linux_assessment": null,
             "notes": "OMEN 40L Desktop - fan writes disabled by v3.6.3 safety gate; RPM telemetry/performance modes only pending hardware validation."
         },
@@ -2104,7 +2138,7 @@
             "supports_undervolt": true,
             "supports_tcc_offset": true,
             "supports_power_limits": true,
-            "supports_battery_care": true,
+            "supports_battery_care": false,
             "linux_assessment": null,
             "notes": "OMEN 45L Desktop - fan writes disabled by v3.6.3 safety gate; RPM telemetry/performance modes only pending hardware validation."
         },
